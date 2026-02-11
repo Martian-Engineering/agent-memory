@@ -1,4 +1,4 @@
-# 🧠 Agent Memory
+# 🧠 OpenClaw Memory
 
 **A three-layer persistent memory system for AI agents.**
 
