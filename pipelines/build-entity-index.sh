@@ -9,6 +9,20 @@
 
 set -euo pipefail
 
+# Resolve BSD vs GNU stat. On macOS with GNU coreutils installed (e.g. via
+# Homebrew), the GNU stat may shadow /usr/bin/stat in PATH even though $OSTYPE
+# is still "darwin*". We detect this by probing for the BSD-specific -f flag
+# and fall back to /usr/bin/stat when the PATH-resolved binary doesn't support it.
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  if stat -f '%Sm' /dev/null &>/dev/null 2>&1; then
+    BSD_STAT="stat"
+  elif /usr/bin/stat -f '%Sm' /dev/null &>/dev/null 2>&1; then
+    BSD_STAT="/usr/bin/stat"
+  else
+    BSD_STAT=""  # No BSD stat available; will use GNU path below
+  fi
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MEMORY_HOME="${MEMORY_HOME:-$(dirname "$SCRIPT_DIR")}"
 ENTITIES_DIR="${MEMORY_HOME}/entities"
@@ -84,10 +98,10 @@ for entity_dir in "$ENTITIES_DIR"/*/; do
 
   last_updated=""
   if [ -f "$summary_file" ]; then
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-      last_updated=$(stat -f '%Sm' -t '%Y-%m-%dT%H:%M:%SZ' "$summary_file" 2>/dev/null || true)
+    if [[ "$OSTYPE" == "darwin"* ]] && [[ -n "$BSD_STAT" ]]; then
+      last_updated=$(TZ=UTC $BSD_STAT -f '%Sm' -t '%Y-%m-%dT%H:%M:%SZ' "$summary_file" 2>/dev/null || true)
     else
-      last_updated=$(stat -c '%y' "$summary_file" 2>/dev/null | sed 's/ /T/' | sed 's/\.[0-9]*/.000/' | sed 's/ .*$/Z/' || true)
+      last_updated=$(TZ=UTC stat -c '%y' "$summary_file" 2>/dev/null | sed 's/ /T/' | sed 's/\.[0-9]*//' | sed 's/ +0000$/Z/' || true)
     fi
     ENTITIES_WITH_SUMMARY=$((ENTITIES_WITH_SUMMARY + 1))
     has_summary="true"

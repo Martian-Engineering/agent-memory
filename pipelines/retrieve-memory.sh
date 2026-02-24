@@ -19,6 +19,20 @@
 
 set -eo pipefail
 
+# Resolve BSD vs GNU date. On macOS with GNU coreutils installed (e.g. via
+# Homebrew), the GNU date may shadow /bin/date in PATH even though $OSTYPE is
+# still "darwin*". We detect this by probing for the BSD-specific -j flag and
+# fall back to /bin/date when the PATH-resolved binary doesn't support it.
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  if date -j -f "%Y-%m-%d" "2000-01-01" +%s &>/dev/null 2>&1; then
+    BSD_DATE="date"
+  elif /bin/date -j -f "%Y-%m-%d" "2000-01-01" +%s &>/dev/null 2>&1; then
+    BSD_DATE="/bin/date"
+  else
+    BSD_DATE=""  # No BSD date available; will use GNU path below
+  fi
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MEMORY_HOME="${MEMORY_HOME:-$(dirname "$SCRIPT_DIR")}"
 ENTITIES_DIR="${MEMORY_HOME}/entities"
@@ -119,9 +133,9 @@ recency_score() {
   if [[ "$timestamp" =~ ^[0-9]+$ ]]; then
     local ts_epoch="$timestamp"
   else
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-      ts_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$timestamp" +%s 2>/dev/null || \
-                 date -j -f "%Y-%m-%d" "$timestamp" +%s 2>/dev/null || echo "$now_epoch")
+    if [[ "$OSTYPE" == "darwin"* ]] && [[ -n "$BSD_DATE" ]]; then
+      ts_epoch=$($BSD_DATE -j -f "%Y-%m-%dT%H:%M:%SZ" "$timestamp" +%s 2>/dev/null || \
+                 $BSD_DATE -j -f "%Y-%m-%d" "$timestamp" +%s 2>/dev/null || echo "$now_epoch")
     else
       ts_epoch=$(date -d "$timestamp" +%s 2>/dev/null || echo "$now_epoch")
     fi
@@ -276,8 +290,8 @@ DAILY_COUNT=0
 
 if [ "$STAGE3_SUFFICIENT" = false ]; then
   for i in $(seq 0 $((DAILY_NOTES_LOOKBACK_DAYS - 1))); do
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-      date_str=$(date -v-${i}d +"%Y-%m-%d")
+    if [[ "$OSTYPE" == "darwin"* ]] && [[ -n "$BSD_DATE" ]]; then
+      date_str=$($BSD_DATE -v-${i}d +"%Y-%m-%d")
     else
       date_str=$(date -d "-${i} days" +"%Y-%m-%d")
     fi
