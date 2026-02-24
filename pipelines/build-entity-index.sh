@@ -99,9 +99,9 @@ for entity_dir in "$ENTITIES_DIR"/*/; do
   last_updated=""
   if [ -f "$summary_file" ]; then
     if [[ "$OSTYPE" == "darwin"* ]] && [[ -n "$BSD_STAT" ]]; then
-      last_updated=$($BSD_STAT -f '%Sm' -t '%Y-%m-%dT%H:%M:%SZ' "$summary_file" 2>/dev/null || true)
+      last_updated=$(TZ=UTC $BSD_STAT -f '%Sm' -t '%Y-%m-%dT%H:%M:%SZ' "$summary_file" 2>/dev/null || true)
     else
-      last_updated=$(stat -c '%y' "$summary_file" 2>/dev/null | sed 's/ /T/' | sed 's/\.[0-9]*/.000/' | sed 's/ .*$/Z/' || true)
+      last_updated=$(TZ=UTC stat -c '%y' "$summary_file" 2>/dev/null | sed 's/ /T/' | sed 's/\.[0-9]*//' | sed 's/ +0000$/Z/' || true)
     fi
     ENTITIES_WITH_SUMMARY=$((ENTITIES_WITH_SUMMARY + 1))
     has_summary="true"
